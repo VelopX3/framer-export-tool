@@ -116,38 +116,42 @@ async function processExport(job: Job, siteUrl: string) {
       }
     });
 
-    job.message = `Downloading ${resourceUrls.size} assets...`;
+    const downloads = Array.from(resourceUrls).slice(0, 200);
+    job.message = `Downloading ${downloads.length} assets...`;
 
-    const chunks: Buffer[] = [];
     const archive = archiver("zip", { zlib: { level: 6 } });
-    archive.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+    // Set up the zip promise BEFORE appending or finalizing so no event is missed
+    const zipPromise = new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      archive.on("data", (chunk: Buffer) => chunks.push(chunk));
+      archive.on("end", () => resolve(Buffer.concat(chunks)));
+      archive.on("error", reject);
+    });
 
     archive.append(modifiedHtml, { name: "index.html" });
 
-    const downloads = Array.from(resourceUrls).slice(0, 200);
     await Promise.allSettled(
       downloads.map(async (url) => {
         try {
-          const res = await fetchWithTimeout(url, 10000);
+          const res = await fetch(url, {
+            signal: AbortSignal.timeout(10000),
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; FramerExporter/1.0)" },
+          });
           if (res.ok) {
-            const buf = Buffer.from(await (res as unknown as globalThis.Response).arrayBuffer());
-            let path = new URL(url).pathname.replace(/^\//, "");
-            if (!path || path.endsWith("/")) path = (path || "") + "index.html";
-            archive.append(buf, { name: path });
+            const buf = Buffer.from(await res.arrayBuffer());
+            let entryName = new URL(url).pathname.replace(/^\//, "");
+            if (!entryName || entryName.endsWith("/")) entryName = (entryName || "") + "index.html";
+            archive.append(buf, { name: entryName });
           }
         } catch {
+          // skip failed assets silently
         }
       })
     );
 
     await archive.finalize();
-
-    await new Promise<void>((resolve, reject) => {
-      archive.on("end", resolve);
-      archive.on("error", reject);
-    });
-
-    job.zipBuffer = Buffer.concat(chunks);
+    job.zipBuffer = await zipPromise;
     job.status = "done";
     job.message = "Export complete";
   } catch (err: unknown) {
