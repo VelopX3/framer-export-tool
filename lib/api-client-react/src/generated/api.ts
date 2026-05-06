@@ -5,18 +5,27 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ErrorResponse,
+  ExportStatus,
+  HealthStatus,
+  StartExportBody,
+  StartExportResponse,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -92,6 +101,180 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Accepts a Framer site URL and starts a background export job
+ * @summary Start a Framer site export
+ */
+export const getStartExportUrl = () => {
+  return `/api/export/start`;
+};
+
+export const startExport = async (
+  startExportBody: StartExportBody,
+  options?: RequestInit,
+): Promise<StartExportResponse> => {
+  return customFetch<StartExportResponse>(getStartExportUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(startExportBody),
+  });
+};
+
+export const getStartExportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startExport>>,
+    TError,
+    { data: BodyType<StartExportBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startExport>>,
+  TError,
+  { data: BodyType<StartExportBody> },
+  TContext
+> => {
+  const mutationKey = ["startExport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startExport>>,
+    { data: BodyType<StartExportBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return startExport(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartExportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startExport>>
+>;
+export type StartExportMutationBody = BodyType<StartExportBody>;
+export type StartExportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Start a Framer site export
+ */
+export const useStartExport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startExport>>,
+    TError,
+    { data: BodyType<StartExportBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startExport>>,
+  TError,
+  { data: BodyType<StartExportBody> },
+  TContext
+> => {
+  return useMutation(getStartExportMutationOptions(options));
+};
+
+/**
+ * @summary Get export job status
+ */
+export const getGetExportStatusUrl = (jobId: string) => {
+  return `/api/export/${jobId}/status`;
+};
+
+export const getExportStatus = async (
+  jobId: string,
+  options?: RequestInit,
+): Promise<ExportStatus> => {
+  return customFetch<ExportStatus>(getGetExportStatusUrl(jobId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetExportStatusQueryKey = (jobId: string) => {
+  return [`/api/export/${jobId}/status`] as const;
+};
+
+export const getGetExportStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getExportStatus>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  jobId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getExportStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetExportStatusQueryKey(jobId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getExportStatus>>> = ({
+    signal,
+  }) => getExportStatus(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getExportStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetExportStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getExportStatus>>
+>;
+export type GetExportStatusQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get export job status
+ */
+
+export function useGetExportStatus<
+  TData = Awaited<ReturnType<typeof getExportStatus>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  jobId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getExportStatus>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetExportStatusQueryOptions(jobId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

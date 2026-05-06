@@ -8,3 +8,34 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface StartExportBody {
+  /** The URL of the Framer site to export */
+  url: string;
+}
+
+export interface StartExportResponse {
+  jobId: string;
+  message: string;
+}
+
+export type ExportStatusStatus =
+  (typeof ExportStatusStatus)[keyof typeof ExportStatusStatus];
+
+export const ExportStatusStatus = {
+  pending: "pending",
+  processing: "processing",
+  done: "done",
+  error: "error",
+} as const;
+
+export interface ExportStatus {
+  jobId: string;
+  status: ExportStatusStatus;
+  message: string;
+  downloadUrl?: string;
+}
+
+export interface ErrorResponse {
+  error: string;
+}

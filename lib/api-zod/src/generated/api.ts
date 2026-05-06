@@ -14,3 +14,30 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Accepts a Framer site URL and starts a background export job
+ * @summary Start a Framer site export
+ */
+export const StartExportBody = zod.object({
+  url: zod.string().describe("The URL of the Framer site to export"),
+});
+
+export const StartExportResponse = zod.object({
+  jobId: zod.string(),
+  message: zod.string(),
+});
+
+/**
+ * @summary Get export job status
+ */
+export const GetExportStatusParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const GetExportStatusResponse = zod.object({
+  jobId: zod.string(),
+  status: zod.enum(["pending", "processing", "done", "error"]),
+  message: zod.string(),
+  downloadUrl: zod.string().optional(),
+});

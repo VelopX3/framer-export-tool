@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: export
+    description: Framer site export operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /export/start:
+    post:
+      operationId: startExport
+      tags: [export]
+      summary: Start a Framer site export
+      description: Accepts a Framer site URL and starts a background export job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartExportBody"
+      responses:
+        "200":
+          description: Export job started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartExportResponse"
+        "400":
+          description: Invalid URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /export/{jobId}/status:
+    get:
+      operationId: getExportStatus
+      tags: [export]
+      summary: Get export job status
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Export status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportStatus"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +84,44 @@ components:
           type: string
       required:
         - status
-
+    StartExportBody:
+      type: object
+      properties:
+        url:
+          type: string
+          description: The URL of the Framer site to export
+      required:
+        - url
+    StartExportResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+        message:
+          type: string
+      required:
+        - jobId
+        - message
+    ExportStatus:
+      type: object
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, done, error]
+        message:
+          type: string
+        downloadUrl:
+          type: string
+      required:
+        - jobId
+        - status
+        - message
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
