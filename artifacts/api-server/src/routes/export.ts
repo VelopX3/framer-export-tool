@@ -18,19 +18,116 @@ interface Job {
 
 const jobs = new Map<string, Job>();
 
+// ── "Made in Framer" badge selectors ─────────────────────────────────────────
 const FRAMER_BADGE_SELECTORS = [
+  // Official badge container ID (most reliable)
+  '#__framer-badge-container',
+  '[id*="framer-badge"]',
+
+  // Class-based patterns
   '[class*="framer-badge"]',
   '[class*="FramerBadge"]',
-  '[id*="framer-badge"]',
-  '[data-framer-badge]',
-  'a[href*="framer.com"][target="_blank"]',
+  '[class*="__framer-badge"]',
   '.framer-badge',
   '#framer-badge',
-  '[class*="__framer-badge"]',
+
+  // Inline-style and asset-based patterns
   'div[style*="framer.com/badge"]',
   'img[src*="framer.com/badge"]',
+
+  // Any anchor that links back to Framer branding
   'a[href="https://framer.com"]',
+  'a[href*="framer.com"][target="_blank"]',
+
+  // Generic data attribute
+  '[data-framer-badge]',
 ];
+
+// ── "Edit Content" / On-page editing UI selectors ────────────────────────────
+// The Edit Content button and pencil icon are injected by Framer's CMS scripts.
+// These selectors target every known variant of that UI element.
+const FRAMER_EDIT_SELECTORS = [
+  // Common IDs used by Framer's on-page editor overlay
+  '#framer-edit-overlay',
+  '#__framer-edit-container',
+  '#framer-cms-edit',
+  '[id*="framer-edit"]',
+  '[id*="framer-cms"]',
+
+  // Class-based patterns for the edit button/panel
+  '[class*="framer-edit"]',
+  '[class*="FramerEdit"]',
+  '[class*="framer-cms"]',
+  '[class*="FramerCms"]',
+  '[class*="edit-content"]',
+  '[class*="EditContent"]',
+
+  // Data attributes emitted by Framer's CMS editing mode
+  '[data-framer-cms]',
+  '[data-framer-edit]',
+  '[data-framer-on-page-edit]',
+
+  // Framer publishes a floating toolbar for editors
+  '[class*="framer-toolbar"]',
+  '[id*="framer-toolbar"]',
+];
+
+// ── Script URL patterns whose removal kills dynamic injection ─────────────────
+// When these scripts are removed from the HTML, the Edit Content button and
+// badge can never be re-injected at runtime — belt-and-suspenders approach.
+const FRAMER_SCRIPT_PATTERNS = [
+  'framer.com/badge',
+  'framer.com/cms',
+  'framer.com/edit',
+  'framer-badge',
+  'framer-cms',
+  'framerusercontent.com/badge',
+  // The on-page editor script
+  '__framer__cms',
+  'on-page-edit',
+];
+
+// ── CSS kill-switch injected into exported HTML ───────────────────────────────
+// Handles any element Cheerio's static parse might miss that gets rendered
+// dynamically from inline scripts or shadow DOM.
+const WATERMARK_CSS_KILLSWITCH = `
+/* ── Framer watermark & edit-UI removal ── */
+#__framer-badge-container,
+[id*="framer-badge"],
+[class*="framer-badge"],
+[class*="FramerBadge"],
+[class*="__framer-badge"],
+.framer-badge,
+#framer-badge,
+[data-framer-badge],
+div[style*="framer.com/badge"],
+img[src*="framer.com/badge"],
+a[href="https://framer.com"],
+#framer-edit-overlay,
+#__framer-edit-container,
+#framer-cms-edit,
+[id*="framer-edit"],
+[id*="framer-cms"],
+[class*="framer-edit"],
+[class*="FramerEdit"],
+[class*="framer-cms"],
+[class*="FramerCms"],
+[class*="edit-content"],
+[class*="EditContent"],
+[data-framer-cms],
+[data-framer-edit],
+[data-framer-on-page-edit],
+[class*="framer-toolbar"],
+[id*="framer-toolbar"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+`;
 
 async function fetchWithTimeout(url: string, timeoutMs = 15000): Promise<Response> {
   const controller = new AbortController();
@@ -72,9 +169,44 @@ async function processExport(job: Job, siteUrl: string) {
 
     const $ = cheerio.load(htmlText);
 
+    // ── 1. Remove "Made in Framer" badge DOM elements ──────────────────────
     for (const sel of FRAMER_BADGE_SELECTORS) {
       $(sel).remove();
     }
+
+    // ── 2. Remove "Edit Content" / on-page editor DOM elements ─────────────
+    for (const sel of FRAMER_EDIT_SELECTORS) {
+      $(sel).remove();
+    }
+
+    // ── 3. Text-content sweep: remove any element whose visible text is
+    //       "Made in Framer" or "Edit Content" (covers obfuscated class names)
+    $("a, div, span, button, p").each((_, el) => {
+      const text = $(el).text().trim().toLowerCase();
+      if (
+        text === "made in framer" ||
+        text === "edit content" ||
+        text === "edit" ||
+        text === "made with framer"
+      ) {
+        $(el).remove();
+      }
+    });
+
+    // ── 4. Strip Framer CMS / badge / editing scripts ──────────────────────
+    //       Without these scripts the Edit Content button can never be injected
+    $("script").each((_, el) => {
+      const src = $(el).attr("src") || "";
+      const inline = $(el).html() || "";
+      const shouldRemove = FRAMER_SCRIPT_PATTERNS.some(
+        (p) => src.includes(p) || inline.includes(p)
+      );
+      if (shouldRemove) $(el).remove();
+    });
+
+    // ── 5. Inject CSS kill-switch into <head> ──────────────────────────────
+    //       Belt-and-suspenders: hides anything dynamically rendered after load
+    $("head").append(`<style id="__no-framer-watermark">${WATERMARK_CSS_KILLSWITCH}</style>`);
 
     $("script, link, img, source").each((_, el) => {
       const tag = $(el);

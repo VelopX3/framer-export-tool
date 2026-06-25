@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts",
-    "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
+    "dev": "cross-env PORT=23414 BASE_PATH=/ vite --config vite.config.ts --host 0.0.0.0",
+    "build": "cross-env PORT=23414 BASE_PATH=/ vite build --config vite.config.ts",
+    "serve": "cross-env PORT=23414 BASE_PATH=/ vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
